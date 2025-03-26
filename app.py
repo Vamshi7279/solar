@@ -5,8 +5,17 @@ import pickle
 app = Flask(__name__)
 
 # Load trained model
-with open("gradient_boosting_model_fixed.pkl", "rb") as file:
-    model = pickle.load(file)
+try:
+    with open("gradient_boosting_model.pkl", "rb") as file:
+        model = pickle.load(file)
+
+    # Ensure model has predict method
+    if not hasattr(model, "predict"):
+        raise TypeError("Loaded object is not a valid model. Check the pickled file.")
+
+except Exception as e:
+    print(f"Error loading model: {e}")
+    model = None
 
 # Define the selected features
 FEATURES = ['solar_noon_dist', 'temperature', 'wind_dir', 'sky_cover', 'visibility', 'humidity', 'avg_wind_speed']
@@ -18,16 +27,23 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
+        if model is None:
+            return "Error: Model not loaded properly.", 500
+
         # Extract only the required features
-        data = [float(request.form[feature]) for feature in FEATURES]
+        data = [float(request.form.get(feature, 0)) for feature in FEATURES]  # Use .get() to avoid KeyError
+
+        # Log received data
+        print("Received data:", request.form)
+        print("Processed data:", data)
 
         # Reshape and predict
         prediction = model.predict(np.array(data).reshape(1, -1))
 
         return f"Predicted Power Generation: {prediction[0]:.2f} kW"
-    
-    except Exception as e:
-        return f"Error: {str(e)}"
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001, debug=True, use_reloader=False)
